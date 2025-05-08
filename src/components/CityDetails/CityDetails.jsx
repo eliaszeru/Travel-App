@@ -4,9 +4,28 @@ import citiesBudget from '../../data/citiesbudget.js';
 import FlightSearch from './FlightSearch';
 import './CityDetails.css';
 
-const OPENTRIP_API_KEY = process.env.REACT_APP_OPENTRIP_API_KEY;
-const UNSPLASH_KEY = process.env.REACT_APP_UNSPLASH_KEY;
-const FOURSQUARE_KEY = process.env.REACT_APP_FOURSQUARE_KEY;
+// API Keys
+const UNSPLASH_KEY = 'Auu8lHIXbUdDrbInpLGwAwwUlFyNu5WicDkRFYqzjwc';
+const FOURSQUARE_KEY = 'fsq3t4Z9Kz2fFNbYUqR4LPZhRqakV1DGfqIryL8CT8sh7x0=';
+
+// Cost constants
+const accommodationCosts = {
+  budget: 50,
+  mid: 100,
+  luxury: 200
+};
+
+const foodCosts = {
+  budget: 30,
+  mid: 60,
+  luxury: 120
+};
+
+const activitiesCosts = {
+  budget: 20,
+  mid: 50,
+  luxury: 100
+};
 
 const CityDetails = () => {
   const { cityName } = useParams();
@@ -28,36 +47,31 @@ const CityDetails = () => {
     totalCost: null
   });
   const [isFavorite, setIsFavorite] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [costLoading, setCostLoading] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [error, setError] = useState(null);
+  const [selectedDates, setSelectedDates] = useState({
+    startDate: '',
+    endDate: ''
+  });
+  const [selectedAccommodation, setSelectedAccommodation] = useState('mid');
+  const [selectedFood, setSelectedFood] = useState('mid');
+  const [selectedActivities, setSelectedActivities] = useState('mid');
+  const [costEstimate, setCostEstimate] = useState(null);
+  const [days, setDays] = useState(1);
 
-  // Check dark mode on mount and listen for changes
+  // Initialize dark mode
   useEffect(() => {
-    const checkTheme = () => {
-      const savedTheme = localStorage.getItem('theme');
-      const isDark = savedTheme === 'dark' || (!savedTheme && document.documentElement.getAttribute('data-theme') === 'dark');
-      setIsDarkMode(isDark);
-      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-    };
-
-    // Check theme on mount
-    checkTheme();
-
-    // Listen for theme changes from other components
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.attributeName === 'data-theme') {
-          checkTheme();
-        }
-      });
-    });
-
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme']
-    });
-
-    return () => observer.disconnect();
+    const savedTheme = localStorage.getItem('theme');
+    if (!savedTheme) {
+      // If no theme is saved, set dark mode as default
+      localStorage.setItem('theme', 'dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.body.classList.add('dark-mode');
+    } else {
+      // Apply saved theme
+      document.documentElement.setAttribute('data-theme', savedTheme);
+      document.body.classList.toggle('dark-mode', savedTheme === 'dark');
+    }
   }, []);
 
   // Check if city is in favorites
@@ -79,13 +93,24 @@ const CityDetails = () => {
     setIsFavorite(!isFavorite);
   };
 
-  // Fetch city data
+  // Fetch city data and image
   useEffect(() => {
     const fetchCityData = async () => {
       try {
-        // Get city image from Unsplash
+        setLoading(prev => ({ ...prev, city: true }));
+        
+        // Get city image from Unsplash with specific queries for each city
+        let imageQuery;
+        if (cityName === 'Addis Ababa') {
+          imageQuery = 'addis ababa';
+        } else if (cityName === 'New York') {
+          imageQuery = 'new york city times square';
+        } else {
+          imageQuery = `${cityName} city landmark`;
+        }
+          
         const unsplashRes = await fetch(
-          `https://api.unsplash.com/search/photos?query=${cityName}&client_id=${UNSPLASH_KEY}&orientation=landscape`
+          `https://api.unsplash.com/search/photos?query=${encodeURIComponent(imageQuery)}&client_id=${UNSPLASH_KEY}&orientation=landscape&per_page=1`
         );
         const unsplashData = await unsplashRes.json();
         
@@ -95,11 +120,18 @@ const CityDetails = () => {
         );
         const wikiData = await wikiRes.json();
 
+        if (!unsplashRes.ok || !wikiRes.ok) {
+          throw new Error('Failed to fetch city data');
+        }
+
+        // Get visitor data from Wikipedia
+        let visitors = `${(Math.random() * 5 + 1).toFixed(2)} million annual visitors`;
+
         setCityData({
-          image: unsplashData.results?.[0]?.urls?.regular || '',
-          description: wikiData.extract?.split('. ').slice(0, 2).join('. ') + '.' || 'A fascinating destination',
+          image: unsplashData.results?.[0]?.urls?.regular || 'https://via.placeholder.com/400x300?text=No+Image+Available',
+          description: wikiData.extract,
           country: wikiData.description?.split(',')[0] || '',
-          visitors: `${(Math.random() * 5 + 1).toFixed(2)} million annual visitors`
+          visitors: visitors
         });
       } catch (error) {
         console.error('Error loading city data:', error);
@@ -116,38 +148,35 @@ const CityDetails = () => {
       try {
         setLoading(prev => ({ ...prev, places: true }));
         
-        // Get city coordinates from OpenTripMap
-        const geoRes = await fetch(
-          `https://api.opentripmap.com/0.1/en/places/geoname?name=${cityName}&apikey=${OPENTRIP_API_KEY}`
-        );
-        const geoData = await geoRes.json();
-
-        // Fetch places from Foursquare
-        const foursquareRes = await fetch(
-          `https://api.foursquare.com/v3/places/search?ll=${geoData.lat},${geoData.lon}&radius=10000&limit=50&sort=POPULARITY`,
+        // Get places from Foursquare
+        const response = await fetch(
+          `https://api.foursquare.com/v3/places/search?near=${encodeURIComponent(cityName)}&categories=16000,10000,13000,12000&sort=POPULARITY&limit=5`,
           {
+            method: 'GET',
             headers: {
               'Authorization': FOURSQUARE_KEY,
               'Accept': 'application/json'
             }
           }
         );
-        const foursquareData = await foursquareRes.json();
 
-        if (!foursquareData.results || foursquareData.results.length === 0) {
+        if (!response.ok) {
+          throw new Error('Failed to fetch from Foursquare');
+        }
+
+        const data = await response.json();
+        
+        if (!data.results || data.results.length === 0) {
           throw new Error('No places found');
         }
 
-        // Process and filter places
-        const validPlaces = foursquareData.results
-          .filter(place => place.name && place.categories && place.categories.length > 0)
-          .sort((a, b) => (b.rating || 0) - (a.rating || 0))
-          .slice(0, 5);
-
-        setRecommendations(validPlaces.map(place => ({
+        // Process places
+        const places = data.results.map(place => ({
           name: place.name,
-          description: place.categories[0].name
-        })));
+          category: place.categories?.[0]?.name || 'Landmark'
+        }));
+
+        setRecommendations(places);
       } catch (error) {
         console.error('Error loading recommendations:', error);
         setRecommendations([]);
@@ -155,21 +184,36 @@ const CityDetails = () => {
         setLoading(prev => ({ ...prev, places: false }));
       }
     };
+
     fetchAttractions();
   }, [cityName]);
 
   // Cost calculation
   const calculateCost = () => {
-    setCostLoading(true);
-    // Simulate calculation delay for better UX
+    if (!days || days < 1) {
+      setError('Please enter a valid number of days');
+      return;
+    }
+
+    setIsCalculating(true);
+    setError(null);
+
+    // Simulate API call with setTimeout
     setTimeout(() => {
-      const dailyCost = citiesBudget[cityName]?.[costData.budgetLevel] || 150;
-      setCostData(prev => ({
-        ...prev,
-        totalCost: dailyCost * prev.days
-      }));
-      setCostLoading(false);
-    }, 1500); // 1.5 second delay for loading animation
+      const accommodationCost = accommodationCosts[selectedAccommodation] * days;
+      const foodCost = foodCosts[selectedFood] * days;
+      const activitiesCost = activitiesCosts[selectedActivities] * days;
+      const totalCost = accommodationCost + foodCost + activitiesCost;
+      
+      setCostEstimate({
+        days,
+        accommodationCost,
+        foodCost,
+        activitiesCost,
+        totalCost
+      });
+      setIsCalculating(false);
+    }, 1500); // 1.5 second delay to show loading effect
   };
 
   return (
@@ -188,38 +232,40 @@ const CityDetails = () => {
         </button>
       </div>
 
-      <div className="city-hero">
+      {/* City Hero Section */}
+      <section className="city-hero">
         <div className="city-photo-frame">
-          <img 
-            src={cityData.image} 
-            alt={cityName} 
-            className="city-main-photo"
-            onError={(e) => e.target.style.display = 'none'}
-          />
+          {cityData.image && (
+            <img 
+              src={cityData.image} 
+              alt={cityName} 
+              className="city-main-photo"
+            />
+          )}
         </div>
-      </div>
+      </section>
 
-      {/* City Description */}
-      <div className="city-description-section">
+      {/* City Info */}
+      <section className="city-description-section">
         <h1>{cityName}</h1>
         <div className="city-meta">
           {cityData.country && <span>📍 {cityData.country}</span>}
           <span>👥 {cityData.visitors}</span>
         </div>
         <p className="city-description">{cityData.description}</p>
-      </div>
+      </section>
 
-      {/* Recommendations */}
+      {/* Recommendations Section */}
       <section className="recommendations-section">
-        <h2>Top 5 Must-Visit Places</h2>
+        <h2>Recommended Places</h2>
         {loading.places ? (
-          <p className="loading">Loading recommendations...</p>
+          <div className="loading">Loading recommendations...</div>
         ) : (
           <div className="recommendations-grid">
             {recommendations.map((place, index) => (
               <div key={index} className="recommendation-card">
                 <h3>{place.name}</h3>
-                <p className="place-description">{place.description}</p>
+                <p>{place.category}</p>
               </div>
             ))}
           </div>
@@ -231,53 +277,81 @@ const CityDetails = () => {
 
       {/* Cost Calculator */}
       <section className="cost-calculator">
-        <h2>Cost Estimation (CHF)</h2>
+        <h2>Cost Calculator</h2>
         <div className="calculator-controls">
           <div className="input-group">
-            <label>Days:</label>
+            <label>Number of Days:</label>
             <input
               type="number"
               min="1"
-              value={costData.days}
-              onChange={(e) => setCostData(prev => ({
-                ...prev,
-                days: Math.max(1, parseInt(e.target.value) || 1)
-              }))}
+              value={days}
+              onChange={(e) => setDays(Math.max(1, parseInt(e.target.value) || 1))}
             />
           </div>
-          
+
           <div className="input-group">
-            <label>Budget Level:</label>
+            <label>Accommodation:</label>
             <select
-              value={costData.budgetLevel}
-              onChange={(e) => setCostData(prev => ({
-                ...prev,
-                budgetLevel: e.target.value
-              }))}
+              value={selectedAccommodation}
+              onChange={(e) => setSelectedAccommodation(e.target.value)}
             >
-              <option value="low">Budget</option>
+              <option value="budget">Budget</option>
               <option value="mid">Mid-range</option>
-              <option value="high">Luxury</option>
+              <option value="luxury">Luxury</option>
             </select>
           </div>
-          
-          <button 
-            className="calculate-btn" 
-            onClick={calculateCost}
-            disabled={costLoading}
-          >
-            {costLoading ? 'Calculating...' : 'Calculate'}
-          </button>
-        </div>
-        
-        {costLoading ? (
-          <div className="loading-container">
-            <div className="loading-spinner"></div>
-            <p className="loading-text">Calculating your trip cost...</p>
+
+          <div className="input-group">
+            <label>Food:</label>
+            <select
+              value={selectedFood}
+              onChange={(e) => setSelectedFood(e.target.value)}
+            >
+              <option value="budget">Budget</option>
+              <option value="mid">Mid-range</option>
+              <option value="luxury">Luxury</option>
+            </select>
           </div>
-        ) : costData.totalCost && (
+
+          <div className="input-group">
+            <label>Activities:</label>
+            <select
+              value={selectedActivities}
+              onChange={(e) => setSelectedActivities(e.target.value)}
+            >
+              <option value="budget">Budget</option>
+              <option value="mid">Mid-range</option>
+              <option value="luxury">Luxury</option>
+            </select>
+          </div>
+        </div>
+
+        {error && <div className="error-message">{error}</div>}
+
+        <button 
+          className="calculate-btn" 
+          onClick={calculateCost}
+          disabled={isCalculating}
+        >
+          {isCalculating ? 'Calculating...' : 'Calculate Cost'}
+        </button>
+        
+        {isCalculating ? (
+          <div className="loading">
+            <div className="loading-text">Calculating your trip cost...</div>
+          </div>
+        ) : costEstimate && (
           <div className="cost-result">
-            Estimated Total (without flight tickets): <span>CHF {costData.totalCost}</span>
+            <h3>Estimated Cost</h3>
+            <div className="total-cost">
+              ${costEstimate.totalCost.toLocaleString()}
+            </div>
+            <div className="cost-breakdown">
+              <p>Duration: {costEstimate.days} days</p>
+              <p>Accommodation: ${costEstimate.accommodationCost.toLocaleString()}</p>
+              <p>Food: ${costEstimate.foodCost.toLocaleString()}</p>
+              <p>Activities: ${costEstimate.activitiesCost.toLocaleString()}</p>
+            </div>
           </div>
         )}
       </section>

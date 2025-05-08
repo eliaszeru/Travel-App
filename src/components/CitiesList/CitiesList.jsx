@@ -1,36 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import './CitiesList.css';
 
 const CitiesList = () => {
-  const [cities, setCities] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  const apiKey = process.env.REACT_APP_OPENTRIP_API_KEY;
-
-  useEffect(() => {
-    const fetchCities = async () => {
-      try {
-        const response = await fetch(`https://api.opentripmap.com/0.1/en/places/geoname?name=paris&apikey=${apiKey}`);
-        const data = await response.json();
-        console.log(data);
-
-        setCities([
-          { name: 'Paris', lat: data.lat, lon: data.lon },
-          { name: 'Tokyo', lat: 35.682839, lon: 139.759455 },
-          { name: 'New York', lat: 40.7128, lon: -74.0060 },
-          { name: 'Rome', lat: 41.9028, lon: 12.4964 },
-          { name: 'Mykonos', lat: 37.4467, lon: 25.3289 },
-        ]);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching cities:', error);
-        setLoading(false);
-      }
-    };
-
-    fetchCities();
-  }, []);
+  const cities = [
+    { name: 'Paris', country: 'France' },
+    { name: 'Tokyo', country: 'Japan' },
+    { name: 'New York', country: 'United States' },
+    { name: 'Rome', country: 'Italy' },
+    { name: 'London', country: 'United Kingdom' },
+    { name: 'Barcelona', country: 'Spain' },
+    { name: 'Amsterdam', country: 'Netherlands' },
+    { name: 'Dubai', country: 'United Arab Emirates' }
+  ];
 
   return (
     <div className="cities-list">
@@ -44,6 +28,7 @@ const CitiesList = () => {
           {cities.map((city, index) => (
             <Link key={index} to={`/city/${city.name}`} className="city-card">
               <h3>{city.name}</h3>
+              <p>{city.country}</p>
             </Link>
           ))}
         </div>

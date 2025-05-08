@@ -87,9 +87,12 @@ body.dark-mode h1 {
 
 .places-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 25px;
   margin-top: 30px;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .place-card {
@@ -140,7 +143,7 @@ body.dark-mode .place-card {
 }
 
 /* Favorite button style */
-.favorite-btn {
+.fav-button {
   background-color: var(--bg-secondary);
   border: none;
   font-size: 22px;
@@ -152,17 +155,17 @@ body.dark-mode .place-card {
   transition: all 0.3s ease;
 }
 
-.favorite-btn:hover {
+.fav-button:hover {
   background-color: var(--error-bg);
   transform: scale(1.1);
 }
 
-body.dark-mode .favorite-btn {
+body.dark-mode .fav-button {
   background-color: #2a2a2a;
   color: #ff6961;
 }
 
-body.dark-mode .favorite-btn:hover {
+body.dark-mode .fav-button:hover {
   background-color: #3a3a3a;
 }
 
@@ -198,7 +201,7 @@ body.dark-mode .favorite-btn:hover {
 }
 
 /* Footer */
-footer {
+.footer {
   text-align: center;
   padding: 20px;
   font-size: 14px;
@@ -207,15 +210,14 @@ footer {
   border-top: 1px solid var(--border-color);
 }
 
-body.dark-mode footer {
+body.dark-mode .footer {
   color: #999;
 }
 
-.city-card img {
-  width: 100%;
-  height: 220px;
-  object-fit: cover;
-  border-radius: 10px;
+@media (max-width: 1024px) {
+  .places-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
