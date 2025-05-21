@@ -2,8 +2,7 @@
 
 A modern travel application that helps users explore cities, find attractions, and plan their trips.
 
-## Live Demo
-Visit the live application at: [travel-app-three-ruddy.vercel.app](https://travel-app-three-ruddy.vercel.app)
+
 
 ## Features
 
